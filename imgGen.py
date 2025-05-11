@@ -19,16 +19,12 @@ from torchvision.transforms import ToTensor, Resize, Compose
 from torchvision.datasets.folder import default_loader
 from torch.nn import functional as F
 from pytorch_fid import fid_score
-from scipy.stats import entropy
-from scipy.io import wavfile
-import librosa
 
 warnings.filterwarnings("ignore")
 
 app = tk.Tk()
 app.geometry("550x700")
 app.title("Image Generator")
-#theme = ctk.CTkEntry(master=app, font=("Arial", 18), text_color="black", fg_color="white").place(x=10, y=20)
 ctk.set_appearance_mode("dark")
 
 
@@ -43,11 +39,6 @@ final_prompt_label.place(x=10, y=100)
 
 img_display = ctk.CTkLabel(master=app, height=512, width=512, text="")
 img_display.place(x=20, y=130)
-
-modelid = "CompVis/stable-diffusion-v1-4"
-pipe = StableDiffusionPipeline.from_pretrained(modelid, revision="fp16", torch_dtype=torch.float16, use_auth_token=auth_token)
-device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-pipe.to(device)
 
 last_generated_image = None
 
@@ -75,13 +66,11 @@ def record_audio(filename="voice.wav", duration=5, fs=44100):
     wavio.write(filename, audio, fs, sampwidth=2)
     print("Recording saved to", filename)
 
-    # Save to outputs/audio for MOS scoring
     output_path = os.path.join("outputs", "audio")
     os.makedirs(output_path, exist_ok=True)
     destination_path = os.path.join(output_path, filename)
     os.replace(filename, destination_path)
 
-    # Calculate and print MOS score
     calculate_mos()
 
 
@@ -114,26 +103,19 @@ def generate():
         last_generated_image = image
 
     img = ImageTk.PhotoImage(image)
-    # Save generated image to outputs/generated_images with timestamp
     generated_dir = "outputs/generated_images"
     os.makedirs(generated_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     image_path = os.path.join(generated_dir, f"generated_{timestamp}.png")
     image.save(image_path)
-    # image.save("generated_image.png")  # Removed or commented out as per instructions
     img_display.configure(image=img)
     img_display.image = img
 
-    # Ensure real_images directory exists before calculating metrics
     os.makedirs("outputs/real_images", exist_ok=True)
-    # Calculate and print FID and Inception Score
+
     fid = calculate_fid()
     is_score = calculate_inception_score()
     mos = calculate_mos()
-    if fid is not None and is_score is not None and mos is not None:
-        print(f"FID averaged {fid:.2f}, indicating close proximity between generated and real-world image features.")
-        print(f"The IS achieved a score of {is_score:.2f}, suggesting moderate image diversity and quality.")
-        print(f"TTS audio received an average MOS score of {mos:.2f}/5, showing near-human naturalness in speech output.")
 
 def save_img():
     if hasattr(img_display, "image") and last_generated_image is not None:
@@ -149,28 +131,12 @@ def calculate_fid():
     if len(os.listdir(generated_dir)) < 2 or len(os.listdir(real_dir)) < 2:
         print("[FID] Not enough images to calculate FID. Add more samples to both folders.")
         return None
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     fid_value = fid_score.calculate_fid_given_paths([real_dir, generated_dir], batch_size=50, device=device, dims=2048, num_workers=0)
     print(f"[FID] Fréchet Inception Distance: {fid_value:.2f}")
     return fid_value
 
-from torchvision.models.inception import inception_v3
 from torch.utils.data import DataLoader, Dataset
 
-class ImageFolderDataset(Dataset):
-    def __init__(self, folder):
-        self.paths = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(('png', 'jpg', 'jpeg'))]
-        self.transform = Compose([
-            Resize((299, 299)),
-            ToTensor()
-        ])
-
-    def __len__(self):
-        return len(self.paths)
-
-    def __getitem__(self, idx):
-        img = default_loader(self.paths[idx])
-        return self.transform(img)
 
 def calculate_inception_score(splits=10):
     image_dir = "outputs/generated_images"
@@ -193,7 +159,6 @@ def calculate_inception_score(splits=10):
     scores = []
     for i in range(splits):
         part = preds[i * (len(preds) // splits): (i + 1) * (len(preds) // splits), :]
-        kl = part * (np.log(part) - np.log(np.expand_dims(np.mean(part, 0), 0)))
         scores.append(np.exp(np.mean(np.sum(kl, 1))))
     is_score = np.mean(scores)
     print(f"[IS] Inception Score: {is_score:.2f}")
@@ -215,7 +180,6 @@ def calculate_mos():
 ctk.CTkButton(app, text="Speak", command=record_and_transcribe).place(x=50, y=610)
 ctk.CTkButton(app, text="Generate Image", command=generate).place(x=200, y=610)
 ctk.CTkButton(app, text="Save Image", command=save_img).place(x=350, y=610)
-#ctk.CTkButton(app, text="Translate", command=translated_text_input).place(x=200, y=670)
 ctk.CTkButton(app, text="Translate", command=translate_text_input).place(x=200, y=650)
 
 if __name__ == "__main__":
