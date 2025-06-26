@@ -7,11 +7,11 @@ A desktop application that allows users to speak a prompt in any language, trans
 - Speech Recognition
 - Translation
 - Image Generation
+- Image saves to downloads folder
 - # Quality Metrics:
   - FID Score: Real vs Generated image similarity
   - Inception Score: Image diversity & quality
   - MOS Estimate: TTS audio naturalness
-- Image saves to downloads folder
 
 ## How to Use
 1. Run the App
